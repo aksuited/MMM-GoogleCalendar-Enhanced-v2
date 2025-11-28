@@ -45,6 +45,10 @@ module.exports = NodeHelper.create({
         payload.id
       );
     }
+
+    		if (notification === "ADD_EVENT") {
+			this.addEvent(payload);
+		}
   },
 
   authenticateWithQueryParams: function (params) {
@@ -223,7 +227,7 @@ module.exports = NodeHelper.create({
           _this.sendSocketNotification("AUTH_NEEDED", {
             url: `https://accounts.google.com/o/oauth2/v2/auth?${encodeQueryData(
               {
-                scope: "https://www.googleapis.com/auth/calendar.readonly",
+                scope: "https://www.googleapis.com/auth/calendar",
                 access_type: "offline",
                 include_granted_scopes: true,
                 response_type: "code",
@@ -356,4 +360,51 @@ module.exports = NodeHelper.create({
       events: events
     });
   }
+
+  	/**
+	 * Add a new event to the calendar
+	 *
+	 * @param {object} payload Event data including calendarID, summary, description, location, startTime, endTime, attendees
+	 */
+	addEvent: function (payload) {
+		const event = {
+			summary: payload.summary,
+			description: payload.description || "",
+			location: payload.location || "",
+			start: {
+				dateTime: payload.startTime,
+				timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+			},
+			end: {
+				dateTime: payload.endTime,
+				timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+			},
+			attendees: payload.attendees || []
+		};
+
+		this.calendarService.events.insert(
+			{
+				calendarId: payload.calendarID,
+				resource: event
+			},
+			(err, res) => {
+				if (err) {
+					Log.error(
+						`${this.name} Error creating event:`,
+						formatError(err)
+					);
+					this.sendSocketNotification("EVENT_CREATE_ERROR", {
+						id: payload.id,
+						error_type: "CREATE_FAILED"
+					});
+				} else {
+					Log.info(`${this.name}: Event created successfully`);
+					this.sendSocketNotification("EVENT_CREATED", {
+						id: payload.id,
+						event: res.data
+					});
+				}
+			}
+		);
+	},
 });
